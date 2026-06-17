@@ -1,0 +1,10 @@
+--- a/src/python/py/models/builders/gemma.py
++++ b/src/python/py/models/builders/gemma.py
+@@ -124,7 +124,13 @@ class GemmaModel(LlamaModel):
+-            self.rope_local_theta = config.rope_local_base_freq
++            if hasattr(config, "rope_local_base_freq"):
++                self.rope_local_theta = config.rope_local_base_freq
++            elif hasattr(config, "rope_parameters") and isinstance(config.rope_parameters, dict):
++                self.rope_local_theta = config.rope_parameters.get("sliding_attention", {}).get("rope_theta", 10000.0)
++            else:
++                self.rope_local_theta = 10000.0

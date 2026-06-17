@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="RagChatApp.MainPage"
+             Title="RAG Chat">
+
+    <Grid RowDefinitions="*,Auto">
+
+        <!-- Setup section: shown while downloading models / loading -->
+        <VerticalStackLayout x:Name="SetupSection"
+                             Padding="24"
+                             Spacing="16"
+                             VerticalOptions="Center">
+            <Label x:Name="SetupStatusLabel"
+                   Text="Initializing…"
+                   HorizontalOptions="Center"
+                   HorizontalTextAlignment="Center" />
+            <ProgressBar x:Name="SetupProgressBar"
+                         Progress="0"
+                         HorizontalOptions="Fill" />
+        </VerticalStackLayout>
+
+        <!-- PDF picker section: shown once models are ready, before PDF is loaded -->
+        <VerticalStackLayout x:Name="PickerSection"
+                             IsVisible="False"
+                             Padding="24"
+                             Spacing="16"
+                             VerticalOptions="Center">
+            <Label Text="Pick a PDF to start chatting with it"
+                   HorizontalOptions="Center" />
+            <Button x:Name="PickPdfButton"
+                    Text="Pick PDF"
+                    Clicked="OnPickPdfClicked"
+                    HorizontalOptions="Center" />
+            <Label x:Name="IndexingStatusLabel"
+                   Text=""
+                   HorizontalOptions="Center"
+                   HorizontalTextAlignment="Center"
+                   IsVisible="False" />
+            <ProgressBar x:Name="IndexingProgressBar"
+                         Progress="0"
+                         IsVisible="False"
+                         HorizontalOptions="Fill" />
+        </VerticalStackLayout>
+
+        <!-- Chat section: shown once a PDF is indexed -->
+        <Grid x:Name="ChatSection"
+              IsVisible="False"
+              RowDefinitions="*,Auto"
+              Padding="12">
+
+            <CollectionView x:Name="MessagesView"
+                            ItemsSource="{Binding Messages}"
+                            Grid.Row="0">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Padding="4,6" ColumnDefinitions="*,Auto">
+                            <Frame BackgroundColor="{Binding RoleColor}"
+                                   CornerRadius="12"
+                                   Padding="12,8"
+                                   HorizontalOptions="{Binding BubbleAlign}"
+                                   Grid.Column="0">
+                                <Label Text="{Binding Text}"
+                                       TextColor="White" />
+                            </Frame>
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+
+            <Grid Grid.Row="1"
+                  ColumnDefinitions="*,Auto"
+                  ColumnSpacing="8"
+                  Padding="0,8,0,0">
+                <Entry x:Name="QuestionEntry"
+                       Placeholder="Ask a question…"
+                       ReturnCommand="{Binding AskCommand}"
+                       Grid.Column="0" />
+                <Button Text="Ask"
+                        Clicked="OnAskClicked"
+                        Grid.Column="1" />
+            </Grid>
+        </Grid>
+
+    </Grid>
+
+</ContentPage>

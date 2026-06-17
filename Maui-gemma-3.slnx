@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MauiApp/MauiApp.csproj" />
+    <Project Path="src/RagConsole/RagConsole.csproj" />
+    <Project Path="src/RagCore/RagCore.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,26 @@
+bin/
+obj/
+*.user
+.vs/
+
+# HuggingFace PyTorch cache (used for ONNX conversion, not needed in repo)
+cache_dir/
+
+# ONNX model binaries (large files - hosted on HuggingFace)
+*.onnx
+*.onnx.data
+*.download
+
+# Android build artifacts
+*.apk
+*.aab
+
+# Claude Code
+.claude/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
