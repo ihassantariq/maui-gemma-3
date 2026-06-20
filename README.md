@@ -8,34 +8,42 @@ A fully on-device RAG (Retrieval-Augmented Generation) chat app built with .NET 
 
 1. App launches → automatically downloads Gemma 3 270M + MiniLM from HuggingFace (~950MB total)
 2. Pick any PDF from your device
-3. Ask questions → answers stream token by token, grounded in the document
+3. Two tabs open: **Summary** (an AI-generated overview, generated once and cached) and **Ask AI** (chat — answers stream token by token, grounded in the document)
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    MAUI Android App                  │
-│                                                      │
-│  Setup         PDF Picker        Chat                │
-│  (download)    (index PDF)       (ask questions)     │
-└──────────────────────┬──────────────────────────────┘
-                       │ uses
-┌──────────────────────▼──────────────────────────────┐
-│                      RagCore                         │
-│                                                      │
-│  ModelDownloader   ← downloads models from HF        │
-│  PdfTextExtractor  ← Syncfusion PDF → page strings   │
-│  TextChunker       ← pages → overlapping chunks      │
-│  MiniLmEmbedder    ← chunk/question → 384-dim vector │
-│  SqliteChunkRepository ← cache index by PDF hash     │
-│  InMemoryVectorStore   ← cosine similarity search    │
-│  GemmaAnswerGenerator  ← streams answer tokens       │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                       MAUI Android App                        │
+│                                                                │
+│  SetupPage          ──navigate──►   TabBar                    │
+│  (download models,                   ├─ SummaryPage           │
+│   pick + index PDF)                  └─ ChatPage               │
+│                                                                │
+│  AppSession ← shared state (embedder, generator, store,       │
+│               document chunks, chat messages) — no DI         │
+│               container, passed to each page's constructor    │
+└───────────────────────────────┬───────────────────────────────┘
+                                │ uses
+┌───────────────────────────────▼───────────────────────────────┐
+│                            RagCore                             │
+│                                                                │
+│  ModelDownloader   ← downloads models from HF, resumable       │
+│  PdfTextExtractor  ← Syncfusion PDF → page strings             │
+│  TextChunker       ← pages → overlapping chunks                │
+│  MiniLmEmbedder    ← chunk/question → 384-dim vector            │
+│  SqliteChunkRepository ← cache index by PDF hash                │
+│  InMemoryVectorStore   ← cosine similarity search               │
+│  GemmaAnswerGenerator  ← GenerateAsync (chat Q&A) and           │
+│                          SummarizeAsync (document summary) —    │
+│                          separate prompt templates, shared      │
+│                          token-streaming/safety-net plumbing    │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### RAG Flow
+### RAG Flow (chat)
 
 ```
 PDF
@@ -47,8 +55,19 @@ Question                                            │ load on next run
  └─ MiniLmEmbedder ──► vector                       │
      └─ InMemoryVectorStore.Search ◄────────────────┘
          └─ top 3 chunks + question
-             └─ GemmaAnswerGenerator ──► streamed tokens
+             └─ GemmaAnswerGenerator.GenerateAsync ──► streamed tokens
 ```
+
+### Summary flow
+
+```
+Document chunks (page order, not similarity-filtered)
+ └─ capped at ~3000 words (empirically the largest safe single-call
+    budget on-device — larger prompts caused a hard, unlogged crash)
+     └─ GemmaAnswerGenerator.SummarizeAsync ──► streamed tokens
+```
+
+Generated once per indexed PDF and cached on `AppSession.Summary` — revisiting the Summary tab redisplays the cached text instead of regenerating.
 
 ---
 
@@ -66,32 +85,35 @@ Maui-gemma-3/
     │   │   ├── TextChunk.cs          ← data model: page number + text
     │   │   └── TextChunker.cs        ← splits pages into overlapping chunks
     │   ├── Embedding/
-    │   │   ├── IEmbedder.cs
     │   │   └── MiniLmEmbedder.cs     ← ONNX inference → 384-dim vector
     │   ├── Generation/
-    │   │   ├── IAnswerGenerator.cs
-    │   │   └── GemmaAnswerGenerator.cs ← Gemma 3 streaming via OnnxRuntimeGenAI
+    │   │   └── GemmaAnswerGenerator.cs ← GenerateAsync (chat) + SummarizeAsync
+    │   │                                 (summary), separate prompts, shared
+    │   │                                 streaming/"Answer:"-strip/fallback logic
     │   ├── Ingestion/
     │   │   └── PdfTextExtractor.cs   ← Syncfusion PDF → page strings
     │   ├── Persistence/
     │   │   ├── IChunkRepository.cs
     │   │   └── SqliteChunkRepository.cs ← SQLite cache keyed by PDF SHA256
     │   ├── Retrieval/
-    │   │   ├── IVectorStore.cs
     │   │   ├── InMemoryVectorStore.cs ← cosine similarity search in RAM
     │   │   ├── ScoredChunk.cs
     │   │   └── VectorMath.cs
     │   └── Services/
     │       └── ModelDownloader.cs    ← resumable download from HuggingFace
-    ├── RagConsole/                   ← CLI tool for desktop testing
-    │   └── Program.cs
     └── MauiApp/                      ← Android app
         ├── MauiProgram.cs
-        ├── App.xaml
-        ├── AppShell.xaml
-        ├── MainPage.xaml             ← 3-section UI: setup → picker → chat
-        ├── MainPage.xaml.cs          ← all app logic
-        ├── ChatMessage.cs            ← INotifyPropertyChanged for streaming bubbles
+        ├── App.xaml(.cs)             ← creates the one AppSession, passes to AppShell
+        ├── AppShell.xaml(.cs)        ← non-tab "setup" route + TabBar(Summary, Ask AI)
+        ├── AppSession.cs             ← shared state (embedder/generator/store/chunks/
+        │                                messages/summary) — no DI container, passed
+        │                                directly to each page's constructor
+        ├── SetupPage.xaml(.cs)       ← model download/load + PDF picker + indexing
+        ├── SummaryPage.xaml(.cs)     ← triggers SummarizeAsync once, caches result
+        ├── ChatPage.xaml(.cs)        ← Q&A chat UI, CollectionView of ChatMessage
+        ├── ChatMessage.cs            ← INotifyPropertyChanged streaming bubble model
+        ├── MarkdownText.cs           ← renders **bold** as FormattedString spans,
+        │                                strips ~~strikethrough~~ markers
         └── Platforms/Android/
 ```
 
@@ -269,12 +291,6 @@ dotnet build -t:Run -f net10.0-android src/MauiApp/MauiApp.csproj
 ```
 
 On first launch the app downloads both models (~950MB total). Downloads are resumable.
-
-### Run the console tool (desktop testing)
-
-```bash
-dotnet run --project src/RagConsole -- /path/to/your.pdf
-```
 
 ---
 

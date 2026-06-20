@@ -2,14 +2,6 @@ namespace RagCore.Retrieval;
 
 public static class VectorMath
 {
-    public static float Dot(ReadOnlySpan<float> a, ReadOnlySpan<float> b)
-    {
-        var sum = 0f;
-        for (var i = 0; i < a.Length; i++)
-            sum += a[i] * b[i];
-        return sum;
-    }
-
     public static float CosineSimilarity(ReadOnlySpan<float> a, ReadOnlySpan<float> b)
     {
         var dot = 0f;

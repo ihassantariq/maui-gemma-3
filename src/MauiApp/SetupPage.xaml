@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="RagChatApp.SetupPage"
+             Title="Setup"
+             BackgroundColor="{AppThemeBinding Light=#F5F3FB, Dark=#141414}">
+
+    <Grid>
+
+        <!-- Setup section: shown while downloading models / loading -->
+        <VerticalStackLayout x:Name="SetupSection"
+                             Padding="32"
+                             Spacing="28"
+                             VerticalOptions="Center">
+
+            <VerticalStackLayout Spacing="4">
+                <Label Text="📚"
+                       FontSize="48"
+                       HorizontalOptions="Center" />
+                <Label Text="RAG Chat"
+                       FontSize="24"
+                       FontAttributes="Bold"
+                       HorizontalOptions="Center" />
+                <Label Text="On-device AI, no cloud required"
+                       FontSize="13"
+                       Opacity="0.6"
+                       HorizontalOptions="Center" />
+            </VerticalStackLayout>
+
+            <Border BackgroundColor="{AppThemeBinding Light=White, Dark=#1f1f1f}"
+                    StrokeShape="RoundRectangle 16"
+                    Stroke="{AppThemeBinding Light=#E1E1E1, Dark=#404040}"
+                    Padding="20"
+                    HorizontalOptions="Fill">
+                <VerticalStackLayout Spacing="14">
+                    <Label x:Name="SetupStatusLabel"
+                           Text="Initializing…"
+                           FontSize="14"
+                           HorizontalOptions="Center"
+                           HorizontalTextAlignment="Center" />
+                    <ProgressBar x:Name="SetupProgressBar"
+                                 Progress="0"
+                                 HeightRequest="6"
+                                 HorizontalOptions="Fill" />
+                </VerticalStackLayout>
+            </Border>
+        </VerticalStackLayout>
+
+        <!-- PDF picker section: shown once models are ready, before PDF is loaded -->
+        <VerticalStackLayout x:Name="PickerSection"
+                             IsVisible="False"
+                             Padding="32"
+                             Spacing="24"
+                             VerticalOptions="Center">
+
+            <VerticalStackLayout Spacing="6">
+                <Label Text="📄"
+                       FontSize="44"
+                       HorizontalOptions="Center" />
+                <Label Text="Ready to chat"
+                       FontSize="22"
+                       FontAttributes="Bold"
+                       HorizontalOptions="Center" />
+                <Label Text="Pick a PDF to get started"
+                       FontSize="14"
+                       Opacity="0.6"
+                       HorizontalOptions="Center" />
+            </VerticalStackLayout>
+
+            <Button x:Name="PickPdfButton"
+                    Text="Pick a PDF"
+                    Clicked="OnPickPdfClicked"
+                    HorizontalOptions="Center"
+                    CornerRadius="24"
+                    Padding="28,14"
+                    FontSize="15" />
+
+            <Border x:Name="IndexingCard"
+                    BackgroundColor="{AppThemeBinding Light=White, Dark=#1f1f1f}"
+                    StrokeShape="RoundRectangle 16"
+                    Stroke="{AppThemeBinding Light=#E1E1E1, Dark=#404040}"
+                    Padding="20"
+                    IsVisible="False"
+                    HorizontalOptions="Fill">
+                <VerticalStackLayout Spacing="14">
+                    <Label x:Name="IndexingStatusLabel"
+                           Text=""
+                           FontSize="14"
+                           HorizontalOptions="Center"
+                           HorizontalTextAlignment="Center" />
+                    <ProgressBar x:Name="IndexingProgressBar"
+                                 Progress="0"
+                                 HeightRequest="6"
+                                 HorizontalOptions="Fill" />
+                </VerticalStackLayout>
+            </Border>
+        </VerticalStackLayout>
+
+    </Grid>
+
+</ContentPage>

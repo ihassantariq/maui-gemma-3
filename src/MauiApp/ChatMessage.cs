@@ -22,16 +22,30 @@ public sealed class ChatMessage : INotifyPropertyChanged
             if (_text == value) return;
             _text = value;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Text)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedText)));
         }
     }
 
-    public Color RoleColor => Role == "user"
-        ? Color.FromArgb("#512BD4")
-        : Color.FromArgb("#2D6A4F");
+    public FormattedString FormattedText => MarkdownText.ToFormattedString(_text, BubbleTextColor);
 
-    public LayoutOptions BubbleAlign => Role == "user"
+    public bool IsUser => Role == "user";
+
+    public Color BubbleColor => IsUser
+        ? Color.FromArgb("#512BD4")
+        : Color.FromArgb("#E1E1E1");
+
+    public Color BubbleTextColor => IsUser
+        ? Colors.White
+        : Color.FromArgb("#1f1f1f");
+
+    public LayoutOptions BubbleAlign => IsUser
         ? LayoutOptions.End
         : LayoutOptions.Start;
+
+    /// <summary>Speech-bubble "tail" effect: the corner nearest the sender's edge is squared off.</summary>
+    public CornerRadius BubbleCorners => IsUser
+        ? new CornerRadius(16, 16, 4, 16)
+        : new CornerRadius(16, 16, 16, 4);
 
     public event PropertyChangedEventHandler? PropertyChanged;
 }

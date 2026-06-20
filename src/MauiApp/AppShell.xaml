@@ -6,9 +6,20 @@
     xmlns:local="clr-namespace:RagChatApp"
     Title="RAG Chat">
 
+    <!-- Initial, non-tabbed route: model setup + PDF picker -->
     <ShellContent
-        Title="Home"
-        ContentTemplate="{DataTemplate local:MainPage}"
-        Route="MainPage" />
+        x:Name="SetupShellContent"
+        Title="Setup"
+        Route="setup" />
+
+    <!-- Shown only after a PDF is successfully indexed (navigated to via "//main") -->
+    <TabBar Route="main">
+        <Tab Title="📄 Summary" Route="summary">
+            <ShellContent x:Name="SummaryShellContent" Route="summary" />
+        </Tab>
+        <Tab Title="💬 Ask AI" Route="chat">
+            <ShellContent x:Name="ChatShellContent" Route="chat" />
+        </Tab>
+    </TabBar>
 
 </Shell>

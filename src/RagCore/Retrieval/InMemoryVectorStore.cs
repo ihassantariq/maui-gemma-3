@@ -2,7 +2,7 @@ using RagCore.Chunking;
 
 namespace RagCore.Retrieval;
 
-public sealed class InMemoryVectorStore : IVectorStore
+public sealed class InMemoryVectorStore
 {
     private readonly List<(TextChunk Chunk, float[] Embedding)> _items = [];
 

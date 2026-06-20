@@ -8,7 +8,7 @@ namespace RagCore.Embedding;
 /// Generates sentence embeddings using the all-MiniLM-L6-v2 ONNX export
 /// (mean-pooled, L2-normalized last_hidden_state -> 384-dim vector).
 /// </summary>
-public sealed class MiniLmEmbedder : IEmbedder, IDisposable
+public sealed class MiniLmEmbedder : IDisposable
 {
     private const int MaxSequenceLength = 256;
     private const string InputIdsName = "input_ids";

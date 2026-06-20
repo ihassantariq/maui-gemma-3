@@ -78,7 +78,23 @@ public static class ModelDownloader
                 throw new InvalidOperationException(
                     $"'{fileName}' not found at:\n  {destPath}\n\nPre-seed via adb push or set a valid download URL.");
 
-            await DownloadFileAsync(client, url, destPath, fileName, onProgress, cancellationToken);
+            const int MaxRetries = 5;
+            var tempPath = destPath + ".download";
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    await DownloadFileAsync(client, url, destPath, fileName, onProgress, cancellationToken);
+                    break;
+                }
+                catch (IOException) when (attempt < MaxRetries)
+                {
+                    var resumedMb = File.Exists(tempPath) ? new FileInfo(tempPath).Length / 1048576.0 : 0;
+                    onProgress?.Invoke(new DownloadProgress(
+                        $"{fileName} (retrying {attempt}/{MaxRetries - 1}, resuming from {resumedMb:F0} MB…)", 0, null));
+                    await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken);
+                }
+            }
         }
     }
 
@@ -132,7 +148,7 @@ public static class ModelDownloader
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 {
-                    throw new IOException($"Download stalled — no data received for 30 seconds. Restart the app to resume from {readBytes / 1048576.0:F0} MB.");
+                    throw new IOException($"Download stalled after 30s at {readBytes / 1048576.0:F0} MB — will retry.");
                 }
 
                 if (bytesRead == 0) break;

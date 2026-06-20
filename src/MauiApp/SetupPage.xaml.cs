@@ -1,33 +1,26 @@
-using System.Collections.ObjectModel;
 using System.Security.Cryptography;
 using RagCore.Chunking;
 using RagCore.Embedding;
 using RagCore.Generation;
 using RagCore.Ingestion;
 using RagCore.Persistence;
-using RagCore.Retrieval;
 using RagCore.Services;
 
 namespace RagChatApp;
 
-public partial class MainPage : ContentPage
+public partial class SetupPage : ContentPage
 {
     private static readonly string CacheRoot = Path.Combine(FileSystem.AppDataDirectory, ".cache", "maui-gemma-3");
     private static readonly string MiniLmModelDir = Path.Combine(CacheRoot, "models", "all-MiniLM-L6-v2");
     private static readonly string GemmaModelDir = Path.Combine(CacheRoot, "models", "gemma-3-270m-it");
     private static readonly string IndexDir = Path.Combine(CacheRoot, "index");
 
-    public ObservableCollection<ChatMessage> Messages { get; } = [];
+    private readonly AppSession _session;
 
-    private MiniLmEmbedder? _embedder;
-    private GemmaAnswerGenerator? _generator;
-    private InMemoryVectorStore? _store;
-    private bool _isGenerating;
-
-    public MainPage()
+    public SetupPage(AppSession session)
     {
         InitializeComponent();
-        BindingContext = this;
+        _session = session;
         _ = Task.Run(InitializeAsync);
     }
 
@@ -66,10 +59,10 @@ public partial class MainPage : ContentPage
             });
 
             UpdateSetup("Loading embedding model…", 0.9);
-            _embedder = await Task.Run(() => new MiniLmEmbedder(MiniLmModelDir));
+            _session.Embedder = await Task.Run(() => new MiniLmEmbedder(MiniLmModelDir));
 
             UpdateSetup("Loading Gemma model (this may take a few minutes)…", 0.95);
-            _generator = await Task.Run(() => new GemmaAnswerGenerator(GemmaModelDir));
+            _session.Generator = await Task.Run(() => new GemmaAnswerGenerator(GemmaModelDir));
 
             MainThread.BeginInvokeOnMainThread(() =>
             {
@@ -93,7 +86,10 @@ public partial class MainPage : ContentPage
                 PickerTitle = "Pick a PDF",
                 FileTypes = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
                 {
-                    { DevicePlatform.Android, ["application/pdf"] },
+                    // Use */* on Android — strict application/pdf hides files with wrong MIME type
+                    // (common for files downloaded via browser or transferred from other devices).
+                    // Extension is validated below instead.
+                    { DevicePlatform.Android, ["*/*"] },
                     { DevicePlatform.iOS, ["com.adobe.pdf"] },
                     { DevicePlatform.MacCatalyst, ["com.adobe.pdf"] },
                 })
@@ -101,9 +97,14 @@ public partial class MainPage : ContentPage
 
             if (result is null) return;
 
+            if (!result.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+            {
+                await DisplayAlertAsync("Invalid file", "Please select a PDF file.", "OK");
+                return;
+            }
+
             PickPdfButton.IsEnabled = false;
-            IndexingStatusLabel.IsVisible = true;
-            IndexingProgressBar.IsVisible = true;
+            IndexingCard.IsVisible = true;
 
             // Android content URIs aren't directly readable via File.OpenRead — copy to cache first.
             string pdfPath;
@@ -122,8 +123,7 @@ public partial class MainPage : ContentPage
 
             await IndexPdfAsync(pdfPath);
 
-            PickerSection.IsVisible = false;
-            ChatSection.IsVisible = true;
+            await Shell.Current.GoToAsync("//main");
         }
         catch (Exception ex)
         {
@@ -140,7 +140,8 @@ public partial class MainPage : ContentPage
         var dbPath = Path.Combine(IndexDir, $"{pdfHash}.db");
 
         IChunkRepository repository = new SqliteChunkRepository();
-        _store = new InMemoryVectorStore();
+        _session.ResetForNewDocument();
+        var store = _session.Store!;
 
         void UpdateIndexing(string status, double progress) =>
             MainThread.BeginInvokeOnMainThread(() =>
@@ -153,8 +154,9 @@ public partial class MainPage : ContentPage
         {
             UpdateIndexing("Loading cached index…", 0.5);
             var items = await Task.Run(() => repository.Load(dbPath));
-            _store.AddRange(items);
-            UpdateIndexing($"Loaded {_store.Count} chunks from cache.", 1.0);
+            store.AddRange(items);
+            _session.DocumentChunks = items.Select(i => i.Chunk).ToList();
+            UpdateIndexing($"Loaded {store.Count} chunks from cache.", 1.0);
         }
         else
         {
@@ -163,62 +165,20 @@ public partial class MainPage : ContentPage
 
             UpdateIndexing($"Chunking {pageTexts.Count} pages…", 0.2);
             var chunks = await Task.Run(() => TextChunker.ChunkPages(pageTexts));
+            _session.DocumentChunks = chunks;
 
             var items = new List<(TextChunk Chunk, float[] Embedding)>(chunks.Count);
             for (var i = 0; i < chunks.Count; i++)
             {
                 var chunk = chunks[i];
-                var embedding = await Task.Run(() => _embedder!.Embed(chunk.Text));
+                var embedding = await Task.Run(() => _session.Embedder!.Embed(chunk.Text));
                 items.Add((chunk, embedding));
                 UpdateIndexing($"Embedding chunk {i + 1}/{chunks.Count}…", 0.2 + 0.7 * (i + 1) / chunks.Count);
             }
 
-            _store.AddRange(items);
+            store.AddRange(items);
             await Task.Run(() => repository.Save(dbPath, items));
             UpdateIndexing($"Indexed {chunks.Count} chunks.", 1.0);
-        }
-    }
-
-    private async void OnAskClicked(object? sender, EventArgs e)
-    {
-        if (_isGenerating || _embedder is null || _generator is null || _store is null) return;
-
-        var question = QuestionEntry.Text?.Trim();
-        if (string.IsNullOrEmpty(question)) return;
-
-        QuestionEntry.Text = string.Empty;
-        _isGenerating = true;
-
-        Messages.Add(new ChatMessage("user", question));
-
-        var assistantMessage = new ChatMessage("assistant", "…");
-        Messages.Add(assistantMessage);
-        MessagesView.ScrollTo(Messages.Count - 1, position: ScrollToPosition.End, animate: false);
-
-        try
-        {
-            var queryEmbedding = await Task.Run(() => _embedder.Embed(question));
-            var results = _store.Search(queryEmbedding, topK: 3);
-
-            var fullText = string.Empty;
-            await foreach (var token in _generator.GenerateAsync(question, results))
-            {
-                fullText += token;
-                var snapshot = fullText;
-                MainThread.BeginInvokeOnMainThread(() =>
-                {
-                    assistantMessage.Text = snapshot;
-                    MessagesView.ScrollTo(Messages.Count - 1, position: ScrollToPosition.End, animate: false);
-                });
-            }
-        }
-        catch (Exception ex)
-        {
-            assistantMessage.Text = $"[Error: {ex.Message}]";
-        }
-        finally
-        {
-            _isGenerating = false;
         }
     }
 

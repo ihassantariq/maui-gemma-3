@@ -1,5 +1,3 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-
 namespace RagChatApp;
 
 public partial class App : Application
@@ -11,6 +9,7 @@ public partial class App : Application
 
 	protected override Window CreateWindow(IActivationState? activationState)
 	{
-		return new Window(new AppShell());
+		var session = new AppSession();
+		return new Window(new AppShell(session));
 	}
 }
