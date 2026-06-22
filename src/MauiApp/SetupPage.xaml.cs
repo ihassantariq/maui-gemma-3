@@ -154,6 +154,11 @@ public partial class SetupPage : ContentPage
         {
             UpdateIndexing("Loading cached index…", 0.5);
             var items = await Task.Run(() => repository.Load(dbPath));
+
+            if (items.Count == 0)
+                throw new InvalidOperationException(
+                    "This PDF doesn't contain any extractable text — it may be a scanned or image-only document.");
+
             store.AddRange(items);
             _session.DocumentChunks = items.Select(i => i.Chunk).ToList();
             UpdateIndexing($"Loaded {store.Count} chunks from cache.", 1.0);
@@ -166,6 +171,10 @@ public partial class SetupPage : ContentPage
             UpdateIndexing($"Chunking {pageTexts.Count} pages…", 0.2);
             var chunks = await Task.Run(() => TextChunker.ChunkPages(pageTexts));
             _session.DocumentChunks = chunks;
+
+            if (chunks.Count == 0)
+                throw new InvalidOperationException(
+                    "This PDF doesn't contain any extractable text — it may be a scanned or image-only document.");
 
             var items = new List<(TextChunk Chunk, float[] Embedding)>(chunks.Count);
             for (var i = 0; i < chunks.Count; i++)

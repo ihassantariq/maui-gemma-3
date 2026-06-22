@@ -37,7 +37,7 @@ public partial class SummaryPage : ContentPage
 
         try
         {
-            var contextChunks = BuildCappedContext(_session.DocumentChunks, MaxSummaryWords);
+            var contextChunks = BuildSampledContext(_session.DocumentChunks, MaxSummaryWords);
             var fullText = string.Empty;
 
             await foreach (var token in _session.Generator.SummarizeAsync(contextChunks))
@@ -64,15 +64,26 @@ public partial class SummaryPage : ContentPage
         }
     }
 
-    private static IReadOnlyList<ScoredChunk> BuildCappedContext(IReadOnlyList<TextChunk> chunks, int maxWords)
+    // Sample whole chunks evenly across the entire document instead of just taking the
+    // first N words. Truncating at the front means anything past ~8-10 pages is never
+    // seen at all — a document's key results/conclusions are just as likely to be in
+    // the back half as the front. Sampling at chunk granularity (not word-level slicing)
+    // keeps every included excerpt complete rather than cut off mid-sentence.
+    private static IReadOnlyList<ScoredChunk> BuildSampledContext(IReadOnlyList<TextChunk> chunks, int maxWords)
     {
-        var result = new List<ScoredChunk>();
-        var budget = maxWords;
-        foreach (var chunk in chunks)
+        if (chunks.Count == 0) return [];
+
+        var avgWordsPerChunk = (double)chunks.Sum(c => c.WordCount) / chunks.Count;
+        var chunksToKeep = Math.Max(1, Math.Min(chunks.Count, (int)(maxWords / avgWordsPerChunk)));
+
+        if (chunksToKeep >= chunks.Count)
+            return chunks.Select(c => new ScoredChunk(c, 1f)).ToList();
+
+        var result = new List<ScoredChunk>(chunksToKeep);
+        for (var i = 0; i < chunksToKeep; i++)
         {
-            if (budget <= 0) break;
-            result.Add(new ScoredChunk(chunk, 1f)); // dummy score; GemmaAnswerGenerator.BuildSummaryPrompt ignores it
-            budget -= chunk.WordCount;
+            var index = (int)((long)i * chunks.Count / chunksToKeep);
+            result.Add(new ScoredChunk(chunks[index], 1f)); // dummy score; GemmaAnswerGenerator.BuildSummaryPrompt ignores it
         }
         return result;
     }
